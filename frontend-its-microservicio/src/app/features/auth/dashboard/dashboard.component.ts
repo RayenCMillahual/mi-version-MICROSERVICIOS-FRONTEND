@@ -1,276 +1,22 @@
 // src/app/features/auth/dashboard/dashboard.component.ts
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { Chart, ChartConfiguration, registerables } from 'chart.js';
 
 import { AuthService } from '../../../core/services/auth.service';
-import { ProductService } from '../../../core/services/product.service';
-import { InvoiceService } from '../../../core/services/invoice.service';
-import { AdminService } from '../../../core/services/admin.service';
+import { AnalyticsService, DashboardAnalytics } from '../../../core/services/analytics.service';
 
-interface DashboardStats {
-  totalProducts: number;
-  totalInvoices: number;
-  totalSpent: number;
-  totalUsers: number;
-}
+// Registrar componentes de Chart.js
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [CommonModule, RouterLink],
-  template: `
-    <div class="min-h-screen bg-gray-50">
-      <!-- Header -->
-      <header class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div class="flex justify-between items-center py-4">
-            <div class="flex items-center">
-              <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg mr-3"></div>
-              <h1 class="text-2xl font-bold text-gray-900">
-                {{ isAdmin() ? 'Panel de Administración' : 'Dashboard' }}
-              </h1>
-              <span *ngIf="isAdmin()" class="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
-                ADMIN
-              </span>
-            </div>
-            <div class="flex items-center space-x-4">
-              <span class="text-gray-700">Hola, {{ currentUser()?.username || 'Usuario' }}</span>
-              <button 
-                (click)="logout()"
-                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
-                Salir
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <!-- Loading State -->
-      <div *ngIf="loading()" class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="text-center py-12">
-          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p class="mt-4 text-gray-600">Cargando dashboard...</p>
-        </div>
-      </div>
-
-      <!-- Main Content -->
-      <main *ngIf="!loading()" class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <!-- Total Products Card -->
-          <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <div class="flex items-center">
-              <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin() ? 'Total Productos' : 'Productos' }}
-                </p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats().totalProducts }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Invoices Card -->
-          <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <div class="flex items-center">
-              <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin() ? 'Total Facturas' : 'Mis Facturas' }}
-                </p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats().totalInvoices }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Users Card (Admin only) -->
-          <div *ngIf="isAdmin()" class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <div class="flex items-center">
-              <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
-                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-600">Total Usuarios</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats().totalUsers }}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Spent Card -->
-          <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <div class="flex items-center">
-              <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-600">
-                  {{ isAdmin() ? 'Ventas Totales' : 'Total Gastado' }}
-                </p>
-                <p class="text-2xl font-bold text-gray-900">\${{ stats().totalSpent | number:'1.2-2' }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-8">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
-          
-          <!-- Admin Actions -->
-          <div *ngIf="isAdmin()" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button 
-              routerLink="/admin/users"
-              class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-              <svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Gestionar Usuarios</p>
-                <p class="text-sm text-gray-600">Ver y editar usuarios</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/admin/invoices"
-              class="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-              <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Todas las Facturas</p>
-                <p class="text-sm text-gray-600">Ver todas las ventas</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/admin/products"
-              class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-              <svg class="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Gestionar Productos</p>
-                <p class="text-sm text-gray-600">CRUD productos</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/admin/reports"
-              class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
-              <svg class="w-8 h-8 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Reportes</p>
-                <p class="text-sm text-gray-600">Analytics y ventas</p>
-              </div>
-            </button>
-          </div>
-
-          <!-- User Actions -->
-          <div *ngIf="!isAdmin()" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button 
-              routerLink="/products"
-              class="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-              <svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Ver Productos</p>
-                <p class="text-sm text-gray-600">Explorar catálogo</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/cart"
-              class="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-              <svg class="w-8 h-8 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 3H2.6M7 13L5.4 5M7 13l-2.293 2.293A1 1 0 005 16v2a1 1 0 001 1h1M17 21v-2a1 1 0 00-1-1h-4a1 1 0 00-1 1v2a1 1 0 001 1h4a1 1 0 001-1z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Mi Carrito</p>
-                <p class="text-sm text-gray-600">Revisar compras</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/invoices"
-              class="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-              <svg class="w-8 h-8 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Mis Facturas</p>
-                <p class="text-sm text-gray-600">Historial compras</p>
-              </div>
-            </button>
-
-            <button 
-              routerLink="/profile"
-              class="flex items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
-              <svg class="w-8 h-8 text-orange-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-              </svg>
-              <div class="text-left">
-                <p class="font-semibold text-gray-900">Mi Perfil</p>
-                <p class="text-sm text-gray-600">Editar datos</p>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Recent Activity -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div class="p-6 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">
-              {{ isAdmin() ? 'Actividad Reciente del Sistema' : 'Mi Actividad Reciente' }}
-            </h2>
-          </div>
-          <div class="p-6">
-            <div *ngIf="recentInvoices().length === 0" class="text-center py-8">
-              <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <p class="text-gray-500">No hay facturas recientes</p>
-            </div>
-            
-            <div *ngFor="let invoice of recentInvoices(); trackBy: trackByInvoiceId" 
-                 class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
-              <div>
-                <p class="font-medium text-gray-900">Factura #{{ invoice.id.substring(0, 8) }}</p>
-                <p class="text-sm text-gray-600">
-                  {{ invoice.items.length }} productos
-                  <span *ngIf="isAdmin() && invoice.userInfo">
-                    - Usuario: {{ invoice.userInfo.username }}
-                  </span>
-                </p>
-              </div>
-              <div class="text-right">
-                <p class="font-semibold text-gray-900">\${{ invoice.total | number:'1.2-2' }}</p>
-                <p class="text-sm text-gray-500">{{ invoice.createdAt | date:'short' }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  `,
+  templateUrl: './dashboard.component.html',
   styles: [`
     :host {
       display: block;
@@ -280,34 +26,30 @@ interface DashboardStats {
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  // ViewChild para acceder a los canvas
+  @ViewChild('salesChart', { static: false }) salesChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('topProductsChart', { static: false }) topProductsChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('categoryChart', { static: false }) categoryChartRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('userGrowthChart', { static: false }) userGrowthChartRef!: ElementRef<HTMLCanvasElement>;
+
   // Signals
   currentUser = signal<any>(null);
   isAdmin = signal(false);
   loading = signal(true);
-  stats = signal<DashboardStats>({
-    totalProducts: 0,
-    totalInvoices: 0,
-    totalSpent: 0,
-    totalUsers: 0
-  });
-  recentInvoices = signal<any[]>([]);
+  analytics = signal<DashboardAnalytics | null>(null);
 
+  // Chart instances
+  private charts: Chart[] = [];
   private destroy$ = new Subject<void>();
-  private loadingCount = 0;
 
   constructor(
     private authService: AuthService,
-    private productService: ProductService,
-    private invoiceService: InvoiceService,
-    private adminService: AdminService,
-    private router: Router,
-    private cdr: ChangeDetectorRef
+    private analyticsService: AnalyticsService,
+    private router: Router
   ) {}
 
   ngOnInit() {
     const user = this.authService.getCurrentUser();
-    console.log('Usuario actual:', user); // Debug
-    
     this.currentUser.set(user);
     this.isAdmin.set(user?.username === 'admin');
     
@@ -317,133 +59,352 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  private startLoading() {
-    this.loadingCount++;
-    this.loading.set(true);
-  }
-
-  private finishLoading() {
-    this.loadingCount--;
-    if (this.loadingCount <= 0) {
-      this.loadingCount = 0;
-      this.loading.set(false);
-      this.cdr.markForCheck();
-    }
+    this.destroyCharts();
   }
 
   loadDashboardData() {
-    console.log('Cargando datos del dashboard...'); // Debug
+    this.loading.set(true);
     
-    // Cargar productos (común para admin y usuario)
-    this.startLoading();
-    this.productService.getProducts().pipe(
+    this.analyticsService.getDashboardAnalytics(6).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
-      next: (products) => {
-        console.log('Productos cargados:', products.length); // Debug
-        const currentStats = this.stats();
-        this.stats.set({
-          ...currentStats,
-          totalProducts: products.length
-        });
-        this.finishLoading();
-      },
-      error: (error) => {
-        console.error('Error loading products:', error);
-        this.finishLoading();
-      }
-    });
-
-    if (this.isAdmin()) {
-      console.log('Cargando datos de admin...'); // Debug
-      this.loadAdminData();
-    } else {
-      console.log('Cargando datos de usuario...'); // Debug
-      this.loadUserData();
-    }
-  }
-
-  private loadAdminData() {
-    // Cargar facturas (admin)
-    this.startLoading();
-    this.adminService.getAllInvoices().pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (invoices) => {
-        console.log('Facturas admin cargadas:', invoices.length); // Debug
-        const totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-        const recent = invoices
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 5);
+      next: (data) => {
+        console.log('Analytics data loaded:', data);
+        this.analytics.set(data);
+        this.loading.set(false);
         
-        const currentStats = this.stats();
-        this.stats.set({
-          ...currentStats,
-          totalInvoices: invoices.length,
-          totalSpent: totalSpent
-        });
-        this.recentInvoices.set(recent);
-        this.finishLoading();
+        // Esperar a que el DOM se actualice antes de crear los gráficos
+        setTimeout(() => {
+          this.createCharts();
+        }, 100);
       },
       error: (error) => {
-        console.error('Error loading invoices:', error);
-        this.finishLoading();
-      }
-    });
-
-    // Cargar usuarios (admin)
-    this.startLoading();
-    this.adminService.getAllUsers().pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (users) => {
-        console.log('Usuarios cargados:', users.length); // Debug
-        const currentStats = this.stats();
-        this.stats.set({
-          ...currentStats,
-          totalUsers: users.length
-        });
-        this.finishLoading();
-      },
-      error: (error) => {
-        console.error('Error loading users:', error);
-        this.finishLoading();
+        console.error('Error loading analytics:', error);
+        this.loading.set(false);
       }
     });
   }
 
-  private loadUserData() {
-    // Cargar mis facturas (usuario normal)
-    this.startLoading();
-    this.invoiceService.getMyInvoices().pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (invoices) => {
-        console.log('Mis facturas cargadas:', invoices.length); // Debug
-        const totalSpent = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-        const recent = invoices
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 5);
-        
-        const currentStats = this.stats();
-        this.stats.set({
-          ...currentStats,
-          totalInvoices: invoices.length,
-          totalSpent: totalSpent
-        });
-        this.recentInvoices.set(recent);
-        this.finishLoading();
-      },
-      error: (error) => {
-        console.error('Error loading my invoices:', error);
-        this.finishLoading();
-      }
-    });
+  refreshData() {
+    this.destroyCharts();
+    this.loadDashboardData();
   }
 
-  trackByInvoiceId = (index: number, invoice: any): string => invoice.id;
+  private createCharts() {
+    const data = this.analytics();
+    if (!data) return;
+
+    this.createSalesChart(data.salesByMonth);
+    this.createTopProductsChart(data.topProducts);
+    this.createCategoryChart(data.categoryDistribution);
+    this.createUserGrowthChart(data.userGrowth);
+  }
+
+  private createSalesChart(salesData: any[]) {
+    if (!this.salesChartRef) return;
+
+    const ctx = this.salesChartRef.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    const config: ChartConfiguration = {
+      type: 'line',
+      data: {
+        labels: salesData.map(d => d.month),
+        datasets: [{
+          label: 'Ventas ($)',
+          data: salesData.map(d => d.total),
+          borderColor: 'rgb(59, 130, 246)',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          pointBackgroundColor: 'rgb(59, 130, 246)',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            titleFont: { size: 14, weight: 'bold' },
+            bodyFont: { size: 13 },
+            callbacks: {
+              label: (context) => {
+                const value = context.parsed.y;
+                const count = salesData[context.dataIndex].count;
+                return [
+                  `Ventas: $${value.toFixed(2)}`,
+                  `Órdenes: ${count}`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (value) => '$' + value
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          x: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    };
+
+    this.charts.push(new Chart(ctx, config));
+  }
+
+  private createTopProductsChart(topProducts: any[]) {
+    if (!this.topProductsChartRef) return;
+
+    const ctx = this.topProductsChartRef.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    const config: ChartConfiguration = {
+      type: 'bar',
+      data: {
+        labels: topProducts.map(p => p.name),
+        datasets: [{
+          label: 'Unidades vendidas',
+          data: topProducts.map(p => p.totalSold),
+          backgroundColor: [
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
+            'rgba(236, 72, 153, 0.8)'
+          ],
+          borderColor: [
+            'rgb(59, 130, 246)',
+            'rgb(16, 185, 129)',
+            'rgb(139, 92, 246)',
+            'rgb(251, 146, 60)',
+            'rgb(236, 72, 153)'
+          ],
+          borderWidth: 2,
+          borderRadius: 8
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            callbacks: {
+              label: (context) => {
+                const product = topProducts[context.dataIndex];
+                return [
+                  `Vendidos: ${product.totalSold} unidades`,
+                  `Ingresos: $${product.revenue.toFixed(2)}`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          y: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    };
+
+    this.charts.push(new Chart(ctx, config));
+  }
+
+  private createCategoryChart(categoryData: any[]) {
+    if (!this.categoryChartRef) return;
+
+    const ctx = this.categoryChartRef.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    const config: ChartConfiguration = {
+      type: 'doughnut',
+      data: {
+        labels: categoryData.map(c => c.category),
+        datasets: [{
+          data: categoryData.map(c => c.count),
+          backgroundColor: [
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
+            'rgba(236, 72, 153, 0.8)',
+            'rgba(245, 158, 11, 0.8)'
+          ],
+          borderColor: '#fff',
+          borderWidth: 3,
+          hoverOffset: 10
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              padding: 15,
+              font: { size: 12 },
+              generateLabels: (chart) => {
+                const data = chart.data;
+                if (data.labels && data.datasets.length) {
+                  return data.labels.map((label, i) => {
+                    const value = data.datasets[0].data[i] as number;
+                    const percentage = categoryData[i].percentage.toFixed(1);
+                    return {
+                      text: `${label} (${percentage}%)`,
+                      fillStyle: data.datasets[0].backgroundColor![i] as string,
+                      hidden: false,
+                      index: i
+                    };
+                  });
+                }
+                return [];
+              }
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12,
+            callbacks: {
+              label: (context) => {
+                const cat = categoryData[context.dataIndex];
+                return [
+                  `${cat.category}`,
+                  `Productos: ${cat.count}`,
+                  `Porcentaje: ${cat.percentage.toFixed(1)}%`
+                ];
+              }
+            }
+          }
+        }
+      }
+    };
+
+    this.charts.push(new Chart(ctx, config));
+  }
+
+  private createUserGrowthChart(userData: any[]) {
+    if (!this.userGrowthChartRef) return;
+
+    const ctx = this.userGrowthChartRef.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    const config: ChartConfiguration = {
+      type: 'line',
+      data: {
+        labels: userData.map(d => d.month),
+        datasets: [
+          {
+            label: 'Total Usuarios',
+            data: userData.map(d => d.totalUsers),
+            borderColor: 'rgb(139, 92, 246)',
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+            tension: 0.4,
+            fill: true,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: 'rgb(139, 92, 246)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          },
+          {
+            label: 'Nuevos Usuarios',
+            data: userData.map(d => d.newUsers),
+            borderColor: 'rgb(16, 185, 129)',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4,
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: 'rgb(16, 185, 129)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            borderDash: [5, 5]
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            padding: 12
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          x: {
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    };
+
+    this.charts.push(new Chart(ctx, config));
+  }
+
+  private destroyCharts() {
+    this.charts.forEach(chart => chart.destroy());
+    this.charts = [];
+  }
+
+  getGrowthClass(growthRate: number): string {
+    if (growthRate > 0) return 'text-green-600';
+    if (growthRate < 0) return 'text-red-600';
+    return 'text-gray-600';
+  }
 
   logout() {
     this.authService.logout();
