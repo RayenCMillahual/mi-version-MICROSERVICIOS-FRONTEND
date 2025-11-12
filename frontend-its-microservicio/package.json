@@ -1,0 +1,159 @@
+{
+  "name": "frontend-its-microservicio",
+  "version": "2.0.0",
+  "description": "E-Commerce Platform Frontend - Professional Angular Application",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "start:prod": "ng serve --configuration production",
+    "start:dev": "ng serve --configuration development --host 0.0.0.0 --port 4200",
+    "build": "ng build",
+    "build:prod": "ng build --configuration production --aot --build-optimizer",
+    "build:analyze": "ng build --configuration production --stats-json && npx webpack-bundle-analyzer dist/stats.json",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:coverage": "ng test --code-coverage",
+    "test:ci": "ng test --watch=false --browsers=ChromeHeadless --code-coverage",
+    "lint": "ng lint",
+    "lint:fix": "ng lint --fix",
+    "e2e": "ng e2e",
+    "serve:sw": "npx http-server dist/ -p 4200",
+    "extract-i18n": "ng extract-i18n",
+    "format": "prettier --write \"src/**/*.{ts,js,html,scss,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,html,scss,css,json}\"",
+    "analyze": "ng build --stats-json && npx webpack-bundle-analyzer dist/frontend-its-microservicio/stats.json",
+    "precommit": "npm run lint && npm run format:check && npm run test:ci"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run precommit",
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  },
+  "commitlint": {
+    "extends": ["@commitlint/config-conventional"]
+  },
+  "prettier": {
+    "printWidth": 100,
+    "tabWidth": 2,
+    "useTabs": false,
+    "semi": true,
+    "singleQuote": true,
+    "quoteProps": "as-needed",
+    "trailingComma": "es5",
+    "bracketSpacing": true,
+    "arrowParens": "avoid",
+    "endOfLine": "lf",
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular",
+          "printWidth": 120
+        }
+      },
+      {
+        "files": "*.scss",
+        "options": {
+          "printWidth": 120,
+          "singleQuote": false
+        }
+      }
+    ]
+  },
+  "eslintConfig": {
+    "extends": [
+      "@angular-eslint/recommended",
+      "@angular-eslint/template/process-inline-templates"
+    ],
+    "rules": {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "@angular-eslint/component-class-suffix": "error",
+      "@angular-eslint/directive-class-suffix": "error",
+      "@angular-eslint/no-empty-lifecycle-method": "warn",
+      "@angular-eslint/use-lifecycle-interface": "error"
+    }
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "Firefox ESR",
+    "not dead",
+    "not IE 9-11"
+  ],
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^20.2.1",
+    "@angular/common": "^20.2.0",
+    "@angular/compiler": "^20.2.0",
+    "@angular/core": "^20.2.0",
+    "@angular/forms": "^20.2.0",
+    "@angular/platform-browser": "^20.2.0",
+    "@angular/platform-browser-dynamic": "^20.2.0",
+    "@angular/router": "^20.2.0",
+    "@angular/service-worker": "^20.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "zone.js": "~0.15.0",
+    "date-fns": "^3.6.0",
+    "lodash": "^4.17.21",
+    "chart.js": "^4.4.0",
+    "chartjs-adapter-date-fns": "^3.0.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.2.0",
+    "@angular/cli": "^20.2.0",
+    "@angular/compiler-cli": "^20.2.0",
+    "@angular-eslint/builder": "^18.3.0",
+    "@angular-eslint/eslint-plugin": "^18.3.0",
+    "@angular-eslint/eslint-plugin-template": "^18.3.0",
+    "@angular-eslint/schematics": "^18.3.0",
+    "@angular-eslint/template-parser": "^18.3.0",
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@tailwindcss/postcss": "^4.1.12",
+    "@types/jasmine": "~5.1.0",
+    "@types/lodash": "^4.17.7",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.9.0",
+    "husky": "^9.1.0",
+    "jasmine-core": "~5.9.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "postcss": "^8.5.6",
+    "prettier": "^3.3.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.9.2",
+    "webpack-bundle-analyzer": "^4.10.0"
+  },
+  "engines": {
+    "node": ">=18.13.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/frontend-its-microservicio.git"
+  },
+  "keywords": [
+    "angular",
+    "e-commerce",
+    "typescript",
+    "tailwindcss",
+    "pwa",
+    "websockets",
+    "microservices"
+  ],
+  "author": "beltranenzocontacto@gmail.com",
+  "license": "MIT",
+  "funding": {
+    "type": "github",
+    "url": ""
+  }
+}

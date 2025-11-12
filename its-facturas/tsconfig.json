@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    // Opcional: si quieres relajar solo la inicialización estricta
+    "strictPropertyInitialization": false,
+    "module": "commonjs",
+    "target": "es2017",
+    "strict": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "baseUrl": "./",
+    "incremental": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
