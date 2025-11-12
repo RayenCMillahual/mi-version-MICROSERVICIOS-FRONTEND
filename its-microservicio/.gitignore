@@ -1,0 +1,29 @@
+# Ignorar dependencias instaladas
+**/node_modules/
+
+# Ignorar builds y artefactos
+**/dist/
+**/coverage/
+**/.cache/
+**/.build/
+
+# Logs, archivos de lock que no desees
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDEs y herramientas
+.idea/
+.vscode/
+.DS_Store
+
+# ⚠️ CRÍTICO: Certificados SSL
+*.pem
+*.key
+*.crt
+certificate.pem
+private-key.pem
+
+# Variables de entorno sensibles
+.env.local
+.env.production

@@ -1,0 +1,161 @@
+services:
+  # ========== BASES DE DATOS ==========
+  
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-users
+    environment:
+      - POSTGRES_DB=usuarios_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-products
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=productos_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db/init-products.sql:/docker-entrypoint-initdb.d/init-products.sql
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:6-jammy
+    container_name: mongodb-facturas
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=facturas_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    command: ["mongod", "--auth", "--bind_ip_all"]
+    networks:
+      - microservices-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://facturas_user:facturas_pass@localhost:27017/facturas_db --quiet
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ========== MICROSERVICIOS ==========
+
+  users-service:
+    build: 
+      context: ./its-users
+      dockerfile: Dockerfile
+    container_name: users-service
+    environment:
+      - NODE_ENV=production
+      - DB_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/usuarios_db?schema=public
+      - PORT=3001
+      - GATEWAY_HOST=0.0.0.0
+      - GATEWAY_PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  products-service:
+    build: 
+      context: ./its-products
+      dockerfile: Dockerfile
+    container_name: products-service
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USERNAME=root
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_DATABASE=productos_db
+      - PORT=3002
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  facturas-service:
+    build: 
+      context: ./its-facturas
+      dockerfile: Dockerfile
+    container_name: facturas-service
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://facturas_user:facturas_pass@mongodb:27017/facturas_db?authSource=facturas_db
+      - PORT=3003
+      # ✅ CORREGIDO: Conectar directamente a users-service
+      - MS_USER_HOST=users-service
+      - MS_USER_PORT=3001
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      users-service:
+        condition: service_started
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  gateway:
+    build: 
+      context: ./its-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      - MS_USER_HOST=users-service
+      - MS_USER_PORT=3001
+      - MS_PRODUCT_HOST=products-service
+      - MS_PRODUCT_PORT=3002
+      - MS_INVOICE_HOST=facturas-service
+      - MS_INVOICE_PORT=3003
+      - FRONTEND_URL=${FRONTEND_URL}
+    depends_on:
+      - users-service
+      - products-service
+      - facturas-service
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mysql_data:
+  mongodb_data:
+
+networks:
+  microservices-network:
+    driver: bridge
